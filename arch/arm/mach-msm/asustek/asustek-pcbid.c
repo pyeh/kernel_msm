@@ -19,6 +19,7 @@
 #include <linux/bitops.h>
 #include <linux/gpio.h>
 #include <linux/string.h>
+#include <linux/io.h>
 #include <mach/board_asustek.h>
 #include <asm/mach-types.h>
 
@@ -344,6 +345,43 @@ static int __devinit asustek_pcbid_init(void)
 {
 	return platform_driver_register(&asustek_pcbid_driver);
 }
+
+static int dummy_arg;
+
+#define WDT0_RST        0x38
+#define WDT0_EN         0x40
+#define WDT0_BARK_TIME  0x4C
+#define WDT0_BITE_TIME  0x5C
+
+extern void __iomem *msm_timer_get_timer0_base(void);
+
+static int gen_wdt_bark(const char *val, struct kernel_param *kp)
+{
+	static void __iomem *msm_tmr0_base;
+	msm_tmr0_base = msm_timer_get_timer0_base();
+	__raw_writel(0, msm_tmr0_base + WDT0_EN);
+	__raw_writel(1, msm_tmr0_base + WDT0_RST);
+	__raw_writel(0x31F3, msm_tmr0_base + WDT0_BARK_TIME);
+	__raw_writel(5 * 0x31F3, msm_tmr0_base + WDT0_BITE_TIME);
+	__raw_writel(1, msm_tmr0_base + WDT0_EN);
+	return 0;
+}
+module_param_call(gen_wdt_bark, gen_wdt_bark, param_get_bool,
+		&dummy_arg, S_IWUSR | S_IRUGO);
+
+static int gen_hw_reset(const char *val, struct kernel_param *kp)
+{
+	static void __iomem *msm_tmr0_base;
+	msm_tmr0_base = msm_timer_get_timer0_base();
+	__raw_writel(0, msm_tmr0_base + WDT0_EN);
+	__raw_writel(1, msm_tmr0_base + WDT0_RST);
+	__raw_writel(5 * 0x31F3, msm_tmr0_base + WDT0_BARK_TIME);
+	__raw_writel(0x31F3, msm_tmr0_base + WDT0_BITE_TIME);
+	__raw_writel(1, msm_tmr0_base + WDT0_EN);
+	return 0;
+}
+module_param_call(gen_hw_reset, gen_hw_reset, param_get_bool,
+		&dummy_arg, S_IWUSR | S_IRUGO);
 
 postcore_initcall(asustek_pcbid_init);
 
